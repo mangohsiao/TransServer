@@ -3,6 +3,8 @@ package com.emos.trans;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.Charset;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.apache.mina.core.service.IoAcceptor;
 import org.apache.mina.filter.codec.ProtocolCodecFilter;
@@ -13,6 +15,8 @@ import org.apache.mina.transport.socket.nio.NioSocketAcceptor;
 public class MinaLongConnServer {
 
 	private static final int PORT = 8002;
+	
+	public static Map<Long, MHolder> holderMap = new HashMap<Long, MHolder>();
 
 	public void start() throws IOException {
 		IoAcceptor acceptor = new NioSocketAcceptor();

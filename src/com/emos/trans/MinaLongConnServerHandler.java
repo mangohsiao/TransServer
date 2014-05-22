@@ -26,12 +26,19 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 		System.out.println("LongConnect Server opened Session ID ="
 				+ String.valueOf(session.getId()));
 		System.out.println("Received from IP: " + clientIp);
+		
+		MHolder holder = new MHolder();
+		MinaLongConnServer.holderMap.put(session.getId(), holder);		
 	}
 
 	@Override
 	public void messageReceived(IoSession session, Object message) {
 
-		System.out.println("-------------------------------------");
+		/* check for remaining */
+		long id = session.getId();
+		MHolder holder = MinaLongConnServer.holderMap.get(id);
+		
+		System.out.println("----------------" + holder.msgRemaining + "---------------------");
 		IoBuffer mBuffer = (IoBuffer) message;
 		byte[] bufBytes = mBuffer.array();
 		int limit = mBuffer.limit();
@@ -43,25 +50,26 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 //			return;
 //		}
 		
-		short type, len;		
+		processMsgBytes(bufBytes, limit, holder);
+		
+/*		short type, len;		
 		type = (short) bufBytes[0];
-//		System.out.println("type = " + type);
 		switch (type) {
 		case 0x01:
 			System.out.println("heart Beat.");
-			/* it's a heart Beat Msg */
+			 it's a heart Beat Msg 
 			return;
 			
 		case 0x03:
 			System.out.println("login Msg.");
-			/* it's a login Msg */
+			 it's a login Msg 
 			return;
 			
 		default:
 			break;
 		}
 
-		/* get Length of payload */
+		 get Length of payload 
 		short l1 = (short) bufBytes[2];
 		short l0 = (short) bufBytes[3];
 		l1 <<= 8;
@@ -72,19 +80,31 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 			System.out.println("only parts of payload received. \nlimit=" + limit + "\tRemaining : " + (len - limit));
 		}
 		
-		handlePayload(bufBytes, 4, limit - 4);
+		handlePayload(bufBytes, 4, limit - 4);*/
 		
 //		System.out.println("Message is:" + expression);
 
 	}
 
-	private void processMsgBytes(byte[] bufBytes, int limit){
+	private void processMsgBytes(byte[] bufBytes, int limit, MHolder holder){
 		int ptr = 0;
 		short type, pLen;
-		while(ptr <= limit){
+		int remaining = holder.msgRemaining;
+		while(ptr < limit){
+			if(remaining > 0){
+				if(remaining > limit){
+					//over limit
+					return;
+				}else{
+					handlePayload(bufBytes, ptr, remaining);
+					ptr += remaining;
+					remaining = 0;
+					holder.msgRemaining = 0;
+					continue;
+				}
+			}
 			type = bufBytes[ptr];
-			ptr += 2;
-			
+			ptr += 2;			
 			switch (type) {
 			case 0x01:
 				System.out.println("heart Beat.");
@@ -103,9 +123,14 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 				l1 <<= 8;
 				pLen = (short) (l1 | l0);
 				System.out.println("pLen : " + pLen);
+				ptr += 2;
 				
-				if(pLen > (limit - ptr + 1)){
-					System.out.println("remaining : " + (pLen - (limit - ptr + 1)) );
+				if(pLen > (limit - ptr)){
+					remaining = pLen - (limit - ptr);
+					System.out.println("remaining : " + remaining);
+					handlePayload(bufBytes, ptr, limit-ptr);
+					holder.msgRemaining = remaining;
+					ptr = limit;
 				}else{
 					handlePayload(bufBytes, ptr, pLen);
 					ptr += pLen;
