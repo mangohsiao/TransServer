@@ -1,5 +1,7 @@
+package com.emos.trans;
 
 import java.net.InetSocketAddress;
+import java.nio.charset.Charset;
 import java.util.HashMap;
 
 import org.apache.mina.core.buffer.IoBuffer;
@@ -20,12 +22,9 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 
 		InetSocketAddress remoteAddress = (InetSocketAddress) session
 				.getRemoteAddress();
-
 		String clientIp = remoteAddress.getAddress().getHostAddress();
-
 		System.out.println("LongConnect Server opened Session ID ="
 				+ String.valueOf(session.getId()));
-
 		System.out.println("Received from IP: " + clientIp);
 	}
 
@@ -33,36 +32,63 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 	public void messageReceived(IoSession session, Object message) {
 
 		System.out.println("-------------------------------------");
-		IoBuffer mBuffer;
-		mBuffer = (IoBuffer) message;
-		int count = mBuffer.limit();
+		IoBuffer mBuffer = (IoBuffer) message;
 		byte[] bufBytes = mBuffer.array();
-		short type, len;
-		type = (short) bufBytes[0];
-		if (type == 0x01) {
-			System.out.println("heart Beat.");
+		int limit = mBuffer.limit();
+//		int limit = bufBytes.length;
+		System.out.println("");
+		
+		if(limit < 2){
+			System.out.println("limit < 2");
 			return;
 		}
+		short type, len;
+		
+		type = (short) bufBytes[0];
+		System.out.println("type = " + type + "  limit: " + mBuffer.limit());
+		switch (type) {
+		case 0x01:
+			System.out.println("heart Beat.");
+			/* it's a heart Beat Msg */
+			return;
+			
+		case 0x03:
+			System.out.println("login Msg.");
+			/* it's a login Msg */
+			return;
+			
+		default:
+			break;
+		}
+
+		/* get Length of payload */
 		short l1 = (short) bufBytes[2];
 		short l0 = (short) bufBytes[3];
 		l1 <<= 8;
 		len = (short) (l1 | l0);
-
 		System.out.println("len : " + len);
-		String expression = message.toString();
-		System.out.println("Message is:" + expression);
+		
+		if(len > limit - 4){
+			System.out.println("only parts of payload received. \nlimit=" + limit + "\tRemaining : " + (len - limit));
+		}
+		
+		handlePayload(bufBytes, 4, limit - 4);
+		
+//		System.out.println("Message is:" + expression);
 
+	}
+
+	private void handlePayload(byte[] bufBytes, int off, int len) {
+		// TODO Auto-generated method stub
+		String s = new String(bufBytes, off, len, Charset.forName("UTF-8"));
+		System.out.println("s: " + s);
 	}
 
 	@Override
 	public void sessionIdle(IoSession session, IdleStatus status) {
 
 		System.out.println("Disconnectingthe idle.");
-
-		// disconnect an idle client
-
 		session.close(true);
-
 	}
 
 	@Override
@@ -73,9 +99,7 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 		System.out.println("in exception.");
 		System.out.println(cause.getMessage());
 		logger.warn(cause.getMessage(), cause);
-
 		session.close(true);
-
 	}
 
 }
