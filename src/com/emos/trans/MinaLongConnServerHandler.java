@@ -36,16 +36,16 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 		byte[] bufBytes = mBuffer.array();
 		int limit = mBuffer.limit();
 //		int limit = bufBytes.length;
-		System.out.println("");
+		System.out.println("limit: " + mBuffer.limit());
 		
-		if(limit < 2){
-			System.out.println("limit < 2");
-			return;
-		}
-		short type, len;
+//		if(limit < 2){
+//			System.out.println("limit < 2");
+//			return;
+//		}
 		
+		short type, len;		
 		type = (short) bufBytes[0];
-		System.out.println("type = " + type + "  limit: " + mBuffer.limit());
+//		System.out.println("type = " + type);
 		switch (type) {
 		case 0x01:
 			System.out.println("heart Beat.");
@@ -78,6 +78,43 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 
 	}
 
+	private void processMsgBytes(byte[] bufBytes, int limit){
+		int ptr = 0;
+		short type, pLen;
+		while(ptr <= limit){
+			type = bufBytes[ptr];
+			ptr += 2;
+			
+			switch (type) {
+			case 0x01:
+				System.out.println("heart Beat.");
+				/* it's a heart Beat Msg */
+				break;
+				
+			case 0x03:
+				System.out.println("login Msg.");
+				/* it's a login Msg */
+				break;
+
+			default:
+				/* get Length of payload */
+				short l1 = (short) bufBytes[ptr];
+				short l0 = (short) bufBytes[ptr+1];
+				l1 <<= 8;
+				pLen = (short) (l1 | l0);
+				System.out.println("pLen : " + pLen);
+				
+				if(pLen > (limit - ptr + 1)){
+					System.out.println("remaining : " + (pLen - (limit - ptr + 1)) );
+				}else{
+					handlePayload(bufBytes, ptr, pLen);
+					ptr += pLen;
+				}				
+				break;
+			}
+		}
+	}
+	
 	private void handlePayload(byte[] bufBytes, int off, int len) {
 		// TODO Auto-generated method stub
 		String s = new String(bufBytes, off, len, Charset.forName("UTF-8"));
