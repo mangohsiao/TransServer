@@ -26,9 +26,9 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 		System.out.println("LongConnect Server opened Session ID ="
 				+ String.valueOf(session.getId()));
 		System.out.println("Received from IP: " + clientIp);
-		
+
 		MHolder holder = new MHolder();
-		MinaLongConnServer.holderMap.put(session.getId(), holder);		
+		MinaLongConnServer.holderMap.put(session.getId(), holder);
 	}
 
 	@Override
@@ -37,65 +37,31 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 		/* check for remaining */
 		long id = session.getId();
 		MHolder holder = MinaLongConnServer.holderMap.get(id);
-		
-		System.out.println("----------------" + holder.msgRemaining + "---------------------");
+
+		System.out.println("----------------" + holder.msgRemaining
+				+ "---------------------");
 		IoBuffer mBuffer = (IoBuffer) message;
 		byte[] bufBytes = mBuffer.array();
 		int limit = mBuffer.limit();
-//		int limit = bufBytes.length;
+		// int limit = bufBytes.length;
 		System.out.println("limit: " + mBuffer.limit());
-		
-//		if(limit < 2){
-//			System.out.println("limit < 2");
-//			return;
-//		}
-		
+
 		processMsgBytes(bufBytes, limit, holder);
-		
-/*		short type, len;		
-		type = (short) bufBytes[0];
-		switch (type) {
-		case 0x01:
-			System.out.println("heart Beat.");
-			 it's a heart Beat Msg 
-			return;
-			
-		case 0x03:
-			System.out.println("login Msg.");
-			 it's a login Msg 
-			return;
-			
-		default:
-			break;
-		}
-
-		 get Length of payload 
-		short l1 = (short) bufBytes[2];
-		short l0 = (short) bufBytes[3];
-		l1 <<= 8;
-		len = (short) (l1 | l0);
-		System.out.println("len : " + len);
-		
-		if(len > limit - 4){
-			System.out.println("only parts of payload received. \nlimit=" + limit + "\tRemaining : " + (len - limit));
-		}
-		
-		handlePayload(bufBytes, 4, limit - 4);*/
-		
-//		System.out.println("Message is:" + expression);
-
 	}
 
-	private void processMsgBytes(byte[] bufBytes, int limit, MHolder holder){
+	private void processMsgBytes(byte[] bufBytes, int limit, MHolder holder) {
 		int ptr = 0;
 		short type, pLen;
 		int remaining = holder.msgRemaining;
-		while(ptr < limit){
-			if(remaining > 0){
-				if(remaining > limit){
-					//over limit
+		while (ptr < limit) {
+			if (remaining > 0) {
+				if (remaining > limit) {
+					// over limit
 					return;
-				}else{
+				} else {
+					//handle pre msg
+					handlePayload(holder.msgRemainBytes, 0, holder.msgRemainBytes.length);
+					
 					handlePayload(bufBytes, ptr, remaining);
 					ptr += remaining;
 					remaining = 0;
@@ -104,13 +70,13 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 				}
 			}
 			type = bufBytes[ptr];
-			ptr += 2;			
+			ptr += 2;
 			switch (type) {
 			case 0x01:
 				System.out.println("heart Beat.");
 				/* it's a heart Beat Msg */
 				break;
-				
+
 			case 0x03:
 				System.out.println("login Msg.");
 				/* it's a login Msg */
@@ -119,30 +85,36 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 			default:
 				/* get Length of payload */
 				short l1 = (short) bufBytes[ptr];
-				short l0 = (short) bufBytes[ptr+1];
+				short l0 = (short) bufBytes[ptr + 1];
 				l1 <<= 8;
 				pLen = (short) (l1 | l0);
 				System.out.println("pLen : " + pLen);
 				ptr += 2;
-				
-				if(pLen > (limit - ptr)){
+
+				if (pLen > (limit - ptr)) {
 					remaining = pLen - (limit - ptr);
 					System.out.println("remaining : " + remaining);
-					handlePayload(bufBytes, ptr, limit-ptr);
+					// handlePayload(bufBytes, ptr, limit-ptr);
 					holder.msgRemaining = remaining;
+					int pre = limit - ptr;
+					holder.msgRemainBytes = new byte[pre];
+					byte[] des = holder.msgRemainBytes;
+					for (int i = 0; i < pre; i++) {
+						des[i] = bufBytes[ptr + i];
+					}
 					ptr = limit;
-				}else{
+				} else {
 					handlePayload(bufBytes, ptr, pLen);
 					ptr += pLen;
-				}				
+				}
 				break;
 			}
 		}
 	}
-	
+
 	private void handlePayload(byte[] bufBytes, int off, int len) {
 		// TODO Auto-generated method stub
-		String s = new String(bufBytes, off, len, Charset.forName("UTF-8"));
+		String s = new String(bufBytes, off, len, Charset.forName("GBK"));
 		System.out.println("s: " + s);
 	}
 
