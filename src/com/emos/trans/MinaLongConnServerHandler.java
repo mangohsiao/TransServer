@@ -39,10 +39,11 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 		/* check for remaining */
 		long id = session.getId();
 		MHolder holder = MinaLongConnServer.holderMap.get(id);
-		
+
 		IoBuffer mBuffer = (IoBuffer) message;
 		byte[] bufBytes = mBuffer.array();
 		int limit = mBuffer.limit();
+
 		System.out.println("limit : " + limit);
 
 		processMsgBytes(bufBytes, limit, holder);
@@ -53,84 +54,139 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 		short type, pLen;
 		int remaining = holder.msgRemaining;
 		while (ptr < limit) {
-			if (remaining > 0) {
-				if (remaining > limit) {
-					// over limit
-					return;
-				} else {
-					System.out.print(holder.session.getId());
-					if (holder.msgPreBytes != null) {
-						// handle pre msg && remaining msg
-						handlePayload2(holder.msgPreType, holder.msgPreBytes, 0, holder.msgPreBytes.length, bufBytes, ptr, remaining);
-					} else {
-						/* no prebytes Payload */
-						handlePayload(holder.msgPreType, bufBytes, ptr,
-								remaining);
-					}
-					ptr += remaining;
-					remaining = 0;
-					holder.msgRemaining = 0;
+			switch (remaining) {
+			case 0:
+				/* remaining == 0 , read HEAD */
+				System.out.println("remaining == 0");
+				type = (short) bufBytes[ptr];
+				if (limit - ptr == 1) {
+					holder.msgRemaining = -1;
+					holder.msgPreType = type;
+					byte[] des = new byte[1];
+					des[0] = bufBytes[ptr];
+					holder.msgPreBytes = des;
+					ptr++;
 					continue;
 				}
-			} else if (remaining == -1) {
-				System.out.println("remaining == -1");
-			} else if (remaining == -3) {
-				System.out.println("remaining == -3");
-			}
-			if (limit - ptr == 1) {
-				// header not whole
-				holder.msgRemaining = -1;
-				holder.msgPreBytes = new byte[1];
-				holder.msgPreBytes[0] = bufBytes[ptr];
-				ptr += 1;
-				continue;
-			}
-			type = bufBytes[ptr];
-			ptr += 2;
-			if (type == 0x01) {
-				System.out.println("heart Beat.");
-				/* it's a heart Beat Msg */
-				continue;
-			}
-			
-			if (limit - ptr == 1) {
-				holder.msgRemaining = -3;
-				holder.msgPreBytes = new byte[1];
-				holder.msgPreBytes[0] = bufBytes[ptr];
-				holder.msgPreType = type;
-				ptr += 1;
-				continue;
-			}
-
-			/* get Length of payload */
-			short l1 = (short) bufBytes[ptr];
-			short l0 = (short) bufBytes[ptr + 1];
-			l1 <<= 8;
-			pLen = (short) (l1 | l0);
-			 System.out.println("pLen : " + pLen);
-			ptr += 2;
-
-			// process Payload
-			if (pLen > (limit - ptr)) {
-				remaining = pLen - (limit - ptr);
-//				 System.out.println("remaining : " + remaining);
-				holder.msgRemaining = remaining;
-				holder.msgPreType = type;
-				int pre = limit - ptr;
-				if (pre != 0) {
-					byte[] des = new byte[pre];
-					for (int i = 0; i < pre; i++) {
-						des[i] = bufBytes[ptr + i];
+				ptr += 2;
+				if(type == 0x01){
+					System.out.println("heart beat");
+					continue;
+				}
+				
+				if (limit == ptr) {
+					holder.msgRemaining = -2;
+					holder.msgPreType = type;
+					holder.msgPreBytes = null;
+					continue;
+				}
+				if (limit - ptr == 1) {
+					holder.msgRemaining = -3;
+					holder.msgPreType = type;
+					byte[] des = new byte[1];
+					des[0] = bufBytes[ptr];
+					holder.msgPreBytes = des;
+					ptr++;
+					continue;
+				}
+				short l1 = (short) bufBytes[ptr];
+				short l0 = (short) bufBytes[ptr + 1];
+				l1 <<= 8;
+				pLen = (short) (l1 | l0);
+				ptr += 2;
+				if (limit - ptr < pLen) {
+					holder.msgRemaining = pLen - (limit - ptr);
+					holder.msgPreType = type;
+					byte[] des = new byte[limit - ptr];
+					for (int i = 0; ptr < limit; ptr++, i++) {
+						des[i] = bufBytes[ptr];
 					}
 					holder.msgPreBytes = des;
+					continue;
 				} else {
+					handlePayload(type, bufBytes, ptr, pLen);
+					ptr += pLen;
+				}
+				break;
+
+			case -1:
+				/* remaining == -1 , to read part of HEAD */
+				System.out.println("remaining == -1");
+				// read reserved.
+				ptr++;
+				remaining = -2;
+				holder.msgRemaining = -2;
+				break;
+
+			case -2:
+				/* remaining == -2 , to read length */
+				System.out.println("remaining == -2");
+				if (limit - ptr == 1) {
+					holder.msgRemaining = -3;
+					byte[] des = new byte[1];
+					des[0] = bufBytes[ptr];
+					holder.msgPreBytes = des;
+					ptr++;
+					continue;
+				}
+				short l01 = (short) bufBytes[ptr];
+				short l00 = (short) bufBytes[ptr + 1];
+				l01 <<= 8;
+				pLen = (short) (l01 | l00);
+				ptr += 2;
+
+				if (limit - ptr < pLen) {
+					holder.msgRemaining = pLen - (limit - ptr);
+					byte[] des = new byte[limit - ptr];
+					for (int i = 0; ptr < limit; ptr++, i++) {
+						des[i] = bufBytes[ptr];
+					}
+					holder.msgPreBytes = des;
+					continue;
+				} else {
+					handlePayload(holder.msgPreType, bufBytes, ptr, pLen);
+					ptr += pLen;
+				}
+				break;
+
+			case -3:
+				/* remaining == -3 , to read part of length */
+				System.out.println("remaining == -3");
+				short l0_1 = (short) holder.msgPreBytes[0];
+				short l0_0 = (short) bufBytes[ptr];
+				l0_1 <<= 8;
+				pLen = (short) (l0_1 | l0_0);
+				ptr++;
+
+				if (limit - ptr < pLen) {
+					holder.msgRemaining = pLen - (limit - ptr);
+					byte[] des = new byte[limit - ptr];
+					for (int i = 0; ptr < limit; ptr++, i++) {
+						des[i] = bufBytes[ptr];
+					}
+					holder.msgPreBytes = des;
+					continue;
+				} else {
+					handlePayload(holder.msgPreType, bufBytes, ptr, pLen);
+					ptr += pLen;
+				}
+				break;
+
+			default:
+				/* remaining > 0 */
+				System.out.println("remaining > 0");
+				if (remaining > limit - ptr) {
+					System.out.print("r>l-p ");
+				} else {
+					handlePayload2(holder.msgPreType, holder.msgPreBytes, 0,
+							holder.msgPreBytes.length, bufBytes, ptr, remaining);
+					remaining = 0;
+					holder.msgRemaining = 0;
 					holder.msgPreBytes = null;
 				}
-				ptr = limit;
-			} else {
-				handlePayload(type, bufBytes, ptr, pLen);
-				ptr += pLen;
+				break;
 			}
+
 		}
 	}
 
@@ -140,7 +196,7 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 
 	private void handlePayload2(int type, byte[] preBytes, int preOff,
 			int preLen, byte[] bufBytes, int off, int len) {
-		
+
 		switch (type) {
 		case 0x03:
 			System.out.println("login Msg.");
@@ -158,8 +214,8 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 				s = new String(bufBytes, off, len, Charset.forName("GBK"));
 			}
 			System.out.println(s);
-
 			break;
+			
 		default:
 			break;
 		}
