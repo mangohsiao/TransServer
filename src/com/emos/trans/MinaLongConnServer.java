@@ -26,7 +26,7 @@ public class MinaLongConnServer {
 //				new ProtocolCodecFilter(new TextLineCodecFactory(Charset
 //						.forName("UTF-8"))));
 		acceptor.setHandler(new MinaLongConnServerHandler());
-		acceptor.getSessionConfig().setReadBufferSize(4096);
+		acceptor.getSessionConfig().setReadBufferSize(4096*2);
 		acceptor.bind(new InetSocketAddress(PORT));
 		System.out.println("Listeningon port " + PORT);
 	}
