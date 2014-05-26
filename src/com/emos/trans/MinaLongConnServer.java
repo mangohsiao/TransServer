@@ -9,6 +9,7 @@ import java.util.Map;
 import org.apache.mina.core.service.IoAcceptor;
 import org.apache.mina.filter.codec.ProtocolCodecFilter;
 import org.apache.mina.filter.codec.textline.TextLineCodecFactory;
+import org.apache.mina.filter.codec.textline.TextLineEncoder;
 import org.apache.mina.filter.logging.LoggingFilter;
 import org.apache.mina.transport.socket.nio.NioSocketAcceptor;
 
@@ -25,6 +26,7 @@ public class MinaLongConnServer {
 //				"codec",
 //				new ProtocolCodecFilter(new TextLineCodecFactory(Charset
 //						.forName("UTF-8"))));
+//		acceptor.getFilterChain().addLast("String", new ProtocolCodecFilter(new TextLineEncoder(), new ));
 		acceptor.setHandler(new MinaLongConnServerHandler());
 		acceptor.getSessionConfig().setReadBufferSize(4096*2);
 		acceptor.bind(new InetSocketAddress(PORT));

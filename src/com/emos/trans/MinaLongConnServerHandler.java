@@ -1,5 +1,7 @@
 package com.emos.trans;
 
+import java.io.IOException;
+import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.Charset;
 import java.util.HashMap;
@@ -43,7 +45,8 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 		IoBuffer mBuffer = (IoBuffer) message;
 		byte[] bufBytes = mBuffer.array();
 		int limit = mBuffer.limit();
-//		System.out.println("limit : " + limit + "-----------------------------------------");
+		System.out.println("limit : " + limit
+				+ "-----------------------------------------");
 
 		processMsgBytes(bufBytes, limit, holder);
 	}
@@ -56,10 +59,10 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 			System.out.print("#");
 			if (remaining == 0) {
 				/* no remaining */
-				
+
 				/* read 2 bytes of head */
 				type = bufBytes[ptr];
-				if (limit - ptr == 1 && type!=0x01) {
+				if (limit - ptr == 1 && type != 0x01) {
 					// header not whole
 					holder.msgRemaining = -1;
 					holder.msgPreBytes = new byte[1];
@@ -74,10 +77,10 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 					/* it's a heart Beat Msg */
 					continue;
 				}
-				if(limit == ptr){
+				if (limit == ptr) {
 					System.out.print("set-2 ");
 					holder.msgRemaining = -2;
-//					continue;
+					// continue;
 					return;
 				}
 
@@ -87,16 +90,16 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 					holder.msgPreBytes = new byte[1];
 					holder.msgPreBytes[0] = bufBytes[ptr];
 					holder.msgPreType = type;
-					ptr ++;
-//					continue;
+					ptr++;
+					// continue;
 					return;
-				}				
+				}
 				/* get Length of payload */
 				short l1 = (short) bufBytes[ptr];
 				short l0 = (short) bufBytes[ptr + 1];
 				l1 <<= 8;
 				pLen = (short) (l1 | l0);
-//				System.out.println("pLen : " + pLen);
+				// System.out.println("pLen : " + pLen);
 				ptr += 2;
 
 				// process Payload
@@ -117,10 +120,10 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 					}
 					ptr = limit;
 				} else {
-					handlePayload(type, bufBytes, ptr, pLen);
+					handlePayload(holder.session, type, bufBytes, ptr, pLen);
 					ptr += pLen;
 				}
-				
+
 			} else if (remaining > 0) {
 				System.out.println("r>0 ");
 				if (remaining > limit - ptr) {
@@ -130,13 +133,14 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 				} else {
 					if (holder.msgPreBytes != null) {
 						// handle pre msg && remaining msg
-						handlePayload2(holder.msgPreType, holder.msgPreBytes,
-								0, holder.msgPreBytes.length, bufBytes, ptr,
+						handlePayload2(holder.session, holder.msgPreType,
+								holder.msgPreBytes, 0,
+								holder.msgPreBytes.length, bufBytes, ptr,
 								remaining);
 					} else {
 						/* no prebytes Payload */
-						handlePayload(holder.msgPreType, bufBytes, ptr,
-								remaining);
+						handlePayload(holder.session, holder.msgPreType,
+								bufBytes, ptr, remaining);
 					}
 					ptr += remaining;
 					remaining = 0;
@@ -147,11 +151,11 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 				/* only read 1 byte. */
 				System.out.print("r=-1 ");
 				short reserved = bufBytes[ptr];
-				ptr ++;
+				ptr++;
 				remaining = -2;
 				holder.msgRemaining = -2;
-//				holder.msgPreType = (short)holder.msgPreBytes[0];
-				
+				// holder.msgPreType = (short)holder.msgPreBytes[0];
+
 			} else if (remaining == -2) {
 				/* only read 1 byte. */
 				System.out.print("r=-2 ");
@@ -186,17 +190,18 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 				holder.msgRemaining = pLen;
 				System.out.println("r=-3.pl=" + pLen + " ");
 				holder.msgPreBytes = null;
-//				System.out.println("pLen : " + pLen);
+				// System.out.println("pLen : " + pLen);
 				++ptr;
 			}
 		}/* end of while */
 	}
 
-	private void handlePayload(int type, byte[] bufBytes, int off, int len) {
-		handlePayload2(type, null, 0, 0, bufBytes, off, len);
+	private void handlePayload(IoSession session, int type, byte[] bufBytes,
+			int off, int len) {
+		handlePayload2(session, type, null, 0, 0, bufBytes, off, len);
 	}
 
-	private void handlePayload2(int type, byte[] preBytes, int preOff,
+	private void handlePayload2(IoSession session, int type, byte[] preBytes, int preOff,
 			int preLen, byte[] bufBytes, int off, int len) {
 
 		switch (type) {
@@ -210,12 +215,32 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 			String s;
 			if (preBytes != null) {
 				s = new String(preBytes, preOff, preLen, Charset.forName("GBK"));
-				s += " + ";
+//				s += " + ";
 				s += new String(bufBytes, off, len, Charset.forName("GBK"));
 			} else {
 				s = new String(bufBytes, off, len, Charset.forName("GBK"));
 			}
 			System.out.println(s);
+			try {
+				JSONObject json = new JSONObject(s);
+				int count = json.getInt("STR");
+				byte[] strByte = Integer.toString(count).getBytes();
+				int lenStr = strByte.length;
+				byte[] byteArray = new byte[4 + lenStr];
+				byteArray[0] = 0x00;
+				byteArray[1] = 0x00;
+				byteArray[2] = (byte)((lenStr&0x0000FF00)>>8);
+				byteArray[3] = (byte)(lenStr&0x000000FF);
+				for (int i=4,j=0; i < lenStr+4; j++,i++) {
+					byteArray[i] = strByte[j];
+				}
+				IoBuffer ioBuf = IoBuffer.wrap(byteArray);
+				OutputStream os = ioBuf.asOutputStream();
+				session.write(ioBuf);
+				System.out.println(ioBuf.limit());
+			} catch (JSONException e) {
+				e.printStackTrace();
+			}
 
 			break;
 		default:
