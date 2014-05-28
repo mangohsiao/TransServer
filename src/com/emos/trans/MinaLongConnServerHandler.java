@@ -298,6 +298,7 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 					list.add(user);
 				}else{
 					//TODO send back msg.
+					System.out.println("UUID not running.");
 				}
 				//register MAP<USER,sessionID>
 				GlobalMap.getUserSsidMap().put(user, session.getId());
