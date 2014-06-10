@@ -10,7 +10,7 @@ import com.emos.trans.MHolder;
 public class GlobalMap {
 	
 	/**
-	 * MAP<UUID,List<USER> >
+	 * MAP<UUID,Set<USER> >
 	 */
 	private static Map<String, Set<String> > uidUserMap;
 	
@@ -20,7 +20,7 @@ public class GlobalMap {
 	private static Map<String, Long> userSsidMap;
 
 	/**
-	 * MAP<sessionID, Holder>
+	 * MAP<sessionID, MHolder>
 	 */
 	private static Map<Long, MHolder> ssidHolderMap;
 
