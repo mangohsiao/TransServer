@@ -7,6 +7,7 @@ public class TransClientLogic {
 	 * 检查用户名密码是否正确。
 	 */
 	public static int checkUserPswd(String user, String pswd){
+		System.out.println("user: "+ user + "\tpswd: " + pswd);
 		return 0;
 	}
 	

@@ -4,6 +4,7 @@ import org.apache.mina.core.session.IoSession;
 
 public class MHolder {
 	IoSession session = null;
+	short type = 0;		/* 1 is Home , 2 is Phone */
 	
 	/* members for Message Processing */
 	short msgPreType = 0;
@@ -12,7 +13,7 @@ public class MHolder {
 	
 	/* for timer, Cleaning Resource without login */
 	//Timertask. login timer.
-	//
+	boolean isLogin = false;
 	
 	/*  */
 }

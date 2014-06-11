@@ -23,7 +23,7 @@ import com.emos.trans.logic.GlobalMap;
 import com.emos.trans.logic.TransClientLogic;
 
 public class MinaLongConnServerHandler extends IoHandlerAdapter {
-
+	
 	private final Logger logger = (Logger) LoggerFactory.getLogger(getClass());
 
 	@Override
@@ -40,6 +40,9 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 		MHolder holder = new MHolder();
 		holder.session = session;
 		GlobalMap.getSsidHolderMap().put(session.getId(), holder);
+		
+		/* 加入计时器，连接XX秒后未登录的直接断开连接 */
+//		MLoginTimer.schedule(new MLoginTimerTask(holder), MCommon.DELAY_LOGIN_CHECK_TASK);
 	}
 
 	@Override
