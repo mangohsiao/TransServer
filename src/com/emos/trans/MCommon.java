@@ -50,13 +50,13 @@ public class MCommon {
 	public static final int MSG_PUSH_ALARM = 0x33;
 	public static final int MSG_PUSH_ALARM_RE = 0x34;
 	
-	/* 0x24 HOME端的报警推送 */
+	/* 0x35 更新推送 */
 	public static final int MSG_HOME_UPDATE = 0x35;
 	public static final int MSG_HOME_UPDATE_RE = 0x36;
 	public static final int MSG_PUSH_UPDATE = 0x37;
 	public static final int MSG_PUSH_UPDATE_RE = 0x38;
 	
-	/* 0x24 HOME端的报警推送 */
+	/* 0x41 同步推送 */
 	public static final int MSG_HOME_SYNC = 0x41;
 	public static final int MSG_HOME_SYNC_RE = 0x42;
 	public static final int MSG_PUSH_SYNC = 0x43;

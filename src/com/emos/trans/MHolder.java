@@ -11,9 +11,6 @@ public class MHolder {
 	int msgRemaining = 0;
 	byte[] msgPreBytes;
 	
-	/* for timer, Cleaning Resource without login */
-	//Timertask. login timer.
+	/* For timer, Cleaning Resource without login */
 	boolean isLogin = false;
-	
-	/*  */
 }

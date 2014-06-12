@@ -5,7 +5,7 @@ import java.util.TimerTask;
 import com.emos.trans.logic.GlobalMap;
 
 public class MLoginTimerTask extends TimerTask {
-	
+
 	private MHolder holder;
 
 	public MLoginTimerTask(MHolder holder) {
@@ -16,11 +16,11 @@ public class MLoginTimerTask extends TimerTask {
 	@Override
 	public void run() {
 		// TODO 此方法在connect后60秒内无登录则触发，断开连接并清除资源。
-		if(holder.isLogin && holder.type == 2){
+		if (holder.isLogin && holder.type == 2) {
 			System.out.println("Login timer Pass.");
 			return;
 		}
-		
+
 		/* 未登录，清除资源 */
 		long id = holder.session.getId();
 		holder.session.close(false);

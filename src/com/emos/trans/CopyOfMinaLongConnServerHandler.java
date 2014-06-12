@@ -13,31 +13,30 @@ import org.apache.mina.core.session.IoSession;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import com.emos.trans.log.MLog;
 import com.emos.trans.logic.GlobalMap;
 import com.emos.trans.logic.TransClientLogic;
 
-public class MinaLongConnServerHandler extends IoHandlerAdapter {
-
+public class CopyOfMinaLongConnServerHandler extends IoHandlerAdapter {
+	
 //	private final Logger logger = (Logger) LoggerFactory.getLogger(getClass());
 
 	@Override
 	public void sessionOpened(IoSession session) {
+
 		InetSocketAddress remoteAddress = (InetSocketAddress) session
 				.getRemoteAddress();
 		String clientIp = remoteAddress.getAddress().getHostAddress();
-		MLog.logger.info("LongConnect Server opened Session ID ="
+		System.out.println("LongConnect Server opened Session ID ="
 				+ String.valueOf(session.getId()));
-		MLog.logger.info("Received from IP: " + clientIp);
+		System.out.println("Received from IP: " + clientIp);
 
 		/* open a session && put it into map && TOBE verify */
 		MHolder holder = new MHolder();
 		holder.session = session;
 		GlobalMap.getSsidHolderMap().put(session.getId(), holder);
-
+		
 		/* 加入计时器，连接XX秒后未登录的直接断开连接 */
-		// MLoginTimer.schedule(new MLoginTimerTask(holder),
-		// MCommon.DELAY_LOGIN_CHECK_TASK);
+//		MLoginTimer.schedule(new MLoginTimerTask(holder), MCommon.DELAY_LOGIN_CHECK_TASK);
 	}
 
 	@Override
@@ -46,15 +45,15 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 		/* check for remaining */
 		long id = session.getId();
 		MHolder holder = GlobalMap.getSsidHolderMap().get(id);
-		if (holder == null) {
-			MLog.logger.debug("messageReceived && holder==null");
+		if(holder == null){
+			System.out.println("messageReceived && holder==null");
 			return;
 		}
 
 		IoBuffer mBuffer = (IoBuffer) message;
 		byte[] bufBytes = mBuffer.array();
 		int limit = mBuffer.limit();
-		MLog.logger.trace("limit : " + limit
+		System.out.println("limit : " + limit
 				+ "-----------------------------------------");
 
 		processMsgBytes(bufBytes, limit, holder);
@@ -82,13 +81,13 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 				}
 				ptr += 2;
 				if (type == 0x01) {
-					MLog.logger.trace("heart Beat.");
+					System.out.println("heart Beat.");
 					/* it's a heart Beat Msg */
 					sendHeartBeat(holder.session);
 					continue;
 				}
 				if (limit == ptr) {
-					MLog.logger.trace("set-2 ");
+					System.out.print("set-2 ");
 					holder.msgRemaining = -2;
 					// continue;
 					return;
@@ -109,13 +108,13 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 				short l0 = (short) bufBytes[ptr + 1];
 				l1 <<= 8;
 				pLen = (short) (l1 | l0);
-				// MLog.logger.trace("pLen : " + pLen);
+				// System.out.println("pLen : " + pLen);
 				ptr += 2;
 
 				// process Payload
 				if (pLen > (limit - ptr)) {
 					remaining = pLen - (limit - ptr);
-					// MLog.logger.trace("remaining : " + remaining);
+					// System.out.println("remaining : " + remaining);
 					holder.msgRemaining = remaining;
 					holder.msgPreType = type;
 					int pre = limit - ptr;
@@ -135,7 +134,7 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 				}
 
 			} else if (remaining > 0) {
-				MLog.logger.trace("r>0 ");
+				System.out.println("r>0 ");
 				if (remaining > limit - ptr) {
 					// over limit
 					System.out.print("remaining > limit\t");
@@ -160,16 +159,15 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 			} else if (remaining == -1) {
 				/* only read 1 byte. */
 				System.out.print("r=-1 ");
-				//TODO reserved 还未解析。
 //				short reserved = bufBytes[ptr];
 				ptr++;
-				if (type == 0x01) {
-					// HeartBeat MSG
+				if(type == 0x01){
+					//HeartBeat MSG
 					sendHeartBeat(holder.session);
-				} else {
+				}else{
 					remaining = -2;
 					holder.msgRemaining = -2;
-					holder.msgPreType = type;
+					 holder.msgPreType = type;
 				}
 
 			} else if (remaining == -2) {
@@ -189,7 +187,7 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 				short l0 = (short) bufBytes[ptr + 1];
 				l1 <<= 8;
 				pLen = (short) (l1 | l0);
-				MLog.logger.trace("r2-len=" + pLen + " ");
+				System.out.println("r2-len=" + pLen + " ");
 				remaining = pLen;
 				holder.msgRemaining = pLen;
 				holder.msgPreBytes = null;
@@ -204,9 +202,9 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 				pLen = (short) (l1 | l0);
 				remaining = pLen;
 				holder.msgRemaining = pLen;
-				MLog.logger.trace("r=-3.pl=" + pLen + " ");
+				System.out.println("r=-3.pl=" + pLen + " ");
 				holder.msgPreBytes = null;
-				// MLog.logger.trace("pLen : " + pLen);
+				// System.out.println("pLen : " + pLen);
 				++ptr;
 			}
 		}/* end of while */
@@ -220,7 +218,7 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 	private void handlePayload2(IoSession session, int type, byte[] preBytes,
 			int preOff, int preLen, byte[] bufBytes, int off, int len) {
 		int rtvl;
-
+		
 		/* combine buffer. */
 		byte[] buffer = new byte[preLen + len];
 		for (int i = 0, j = preOff; i < preLen; i++, j++) {
@@ -236,64 +234,11 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 			JSONObject jsonMsg = new JSONObject(strIn);
 
 			switch (type) {
-			/**********************************************
-			 * Logic For Phone;
-			 **********************************************/			
-			/* 登录验证，不通过则更新schedule=60秒 */
-			case MCommon.MSG_PHONE_LOGIN: 
-				MLog.logger.debug(" -- MSG_PHONE_LOGIN -- ");
-				break;
-				
-			/* 登出，断开连接，清除User的资源及绑定关系 */	
-			case MCommon.MSG_PHONE_LOGOUT: 
-				MLog.logger.debug(" -- MSG_PHONE_LOGOUT -- ");
-				break;
-				
-			/* 注册启动的安防主控的UUID */
-			case MCommon.MSG_PHONE_REG_UUID: 
-				MLog.logger.debug(" -- MSG_PHONE_REG_UUID -- ");
-				break;
-				
-			/* 撤除注册的主控UUID，将不会推送，从MAP<UUID,SET<USER>>里删除 */
-			case MCommon.MSG_PHONE_UNREG_UUID: 
-				MLog.logger.debug(" -- MSG_PHONE_UNREG_UUID -- ");
-				break;
-
-			/**********************************************
-			 * Logic for Home;
-			 **********************************************/
-			/* 主控发过来的消息，进行UUID登记，存入MAP<UUID,SET<USER>>, 作为key */
-			case MCommon.MSG_HOME_REG: 
-				MLog.logger.debug(" -- MSG_HOME_REG -- ");
-				String homeUuid = jsonMsg.getString("UUID");
-				// register MAP<UUID,List<User> >
-				Set<String> listUser = new HashSet<String>();
-				GlobalMap.getUidUserMap().put(homeUuid, listUser);
-				break;
-
-			/* 主控发过来的消息，进行UUID撤销，清除MAP<UUID,SET<USER>>中的key-value */
-			case MCommon.MSG_HOME_UNREG: 
-				MLog.logger.debug(" -- MSG_HOME_UNREG -- ");
-				break;
-
-			/**********************************************
-			 * Logic for Push;
-			 **********************************************/
-			case MCommon.MSG_PUSH_ALARM: /*  */
-				MLog.logger.debug(" -- MSG_PUSH_ALARM -- ");
-				break;
-			case MCommon.MSG_PUSH_UPDATE: /*  */
-				MLog.logger.debug(" -- MSG_PUSH_UPDATE -- ");
-				break;
-			case MCommon.MSG_PUSH_SYNC: /*  */
-				MLog.logger.debug(" -- MSG_PUSH_SYNC -- ");
-				break;
-
 			/*
 			 * login MSG ???
 			 */
 			case 0x03:
-				MLog.logger.debug("login Msg.");
+				System.out.println("login Msg.");
 				/* it's a login Msg */
 
 				break;
@@ -311,7 +256,7 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 				} else {
 					s = new String(bufBytes, off, len, Charset.forName("GBK"));
 				}
-				MLog.logger.debug(s);
+				System.out.println(s);
 				try {
 					JSONObject json = new JSONObject(s);
 					int count = json.getInt("STR");
@@ -336,23 +281,23 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 			 * 0x10 Client连接Server时，用户名密码验证，以及确认UUID
 			 */
 			case 0x10:
-				MLog.logger.debug("case 0x10");
+				System.out.println("case 0x10");
 				String user = jsonMsg.getString("USER");
 				String uuid = jsonMsg.getString("UUID");
 				String pswd = jsonMsg.getString("PSWD");
 				rtvl = TransClientLogic.checkUserPswd(user, pswd);
-				if (rtvl < 0) {
-					MLog.logger.debug("pswd Wrong!");
+				if(rtvl < 0){
+					System.out.println("pswd Wrong!");
 				}
-				// register MAP<UUID,List<USER> >
+				//register MAP<UUID,List<USER> >
 				Set<String> list = GlobalMap.getUidUserMap().get(uuid);
-				if (list != null) {
+				if(list != null){
 					list.add(user);
-				} else {
-					// TODO send back msg.
-					MLog.logger.debug("UUID not running.");
+				}else{
+					//TODO send back msg.
+					System.out.println("UUID not running.");
 				}
-				// register MAP<USER,sessionID>
+				//register MAP<USER,sessionID>
 				GlobalMap.getUserSsidMap().put(user, session.getId());
 				break;
 
@@ -360,62 +305,72 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 			 * 0x12 Client退出推送
 			 */
 			case 0x12:
-				MLog.logger.debug("case 0x12");
+				System.out.println("case 0x12");
+				break;
+
+			/*
+			 * 0x20 Home端首次连接发送，UUID确认。
+			 */
+			case 0x20:
+				System.out.println("case 0x20");
+				String homeUuid = jsonMsg.getString("UUID");
+				//register MAP<UUID,List<User> >
+				Set<String> listUser = new HashSet<String>();
+				GlobalMap.getUidUserMap().put(homeUuid, listUser);
 				break;
 
 			/*
 			 * 0x22 Home端推送消息，格式{json}
 			 */
-			case 0x122:
-				MLog.logger.debug("case 0x22");
+			case 0x22:
+				System.out.println("case 0x22");
 				String toPushUuid = jsonMsg.getString("UUID");
-				// get List<USER>
-				Set<String> listToPushUser = GlobalMap.getUidUserMap().get(
-						toPushUuid);
+				//get List<USER>
+				Set<String> listToPushUser = GlobalMap.getUidUserMap().get(toPushUuid);
 				Map<String, Long> sessionIdMap = GlobalMap.getUserSsidMap();
 				Map<Long, MHolder> holderMap = GlobalMap.getSsidHolderMap();
-				// for each USER
-				if (listToPushUser == null) {
-					MLog.logger.debug("UUID not register.");
+				//for each USER
+				if(listToPushUser == null){
+					System.out.println("UUID not register.");
 					break;
 				}
 				for (String toPushUser : listToPushUser) {
 					Long sessionID = sessionIdMap.get(toPushUser);
-					if (sessionID != null) {
-						MLog.logger.debug("pushing..." + toPushUser);
+					if(sessionID != null){
+						System.out.println("pushing..." + toPushUser);
 						MHolder holder = holderMap.get(sessionID);
-						if (holder == null) {
-							MLog.logger.debug("USER session not found.");
+						if(holder==null){
+							System.out.println("USER session not found.");
 							continue;
 						}
-						// push Message
+						//push Message			
 						byte[] strInBytes = strIn.getBytes();
 						byte[] toPushBytes = new byte[strInBytes.length + 4];
 						toPushBytes[0] = 0x23;
 						toPushBytes[1] = 0x23;
 						toPushBytes[2] = (byte) ((strInBytes.length & 0x0000FF00) >> 8);
 						toPushBytes[3] = (byte) (strInBytes.length & 0x000000FF);
-						for (int i = 4, j = 0; i < strInBytes.length + 4; i++, j++) {
+						for(int i=4,j=0;i<strInBytes.length+4;i++,j++){
 							toPushBytes[i] = strInBytes[j];
 						}
 						IoBuffer mIoBuffer = IoBuffer.wrap(toPushBytes);
 						holder.session.write(mIoBuffer);
-					} else {
-						// session == null, clean!!!!
+					}else{
+						//session == null,  clean!!!!
 					}
-				}// end of for
+				}//end of for				
 				break;
 
 			default:
 				break;
 			}
 		} catch (JSONException e1) {
-			// JOSN格式解析出错。
+			//JOSN格式解析出错。
 			e1.printStackTrace();
 		}
 	}
-
-	private void sendHeartBeat(IoSession session) {
+	
+	private void sendHeartBeat(IoSession session){
 		byte[] heartBeatMsg = new byte[2];
 		heartBeatMsg[0] = 0x02;
 		heartBeatMsg[1] = 0x00;
@@ -426,7 +381,7 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 	@Override
 	public void sessionIdle(IoSession session, IdleStatus status) {
 
-		MLog.logger.debug("Disconnectingthe idle.");
+		System.out.println("Disconnectingthe idle.");
 		session.close(true);
 
 		/* remove HOLDER from MAP<sessionID,MHolder> */
@@ -437,12 +392,12 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 	public void exceptionCaught(IoSession session, Throwable cause) {
 
 		// close the connection onexceptional situation
-		MLog.logger.debug("in exception.");
-		MLog.logger.debug(cause.getMessage());
-
+		System.out.println("in exception.");
+		System.out.println(cause.getMessage());
+		
 		/* remove This session in the map */
-		// MinaLongConnServer.holderMap.put(session.getId(), null);
-
+//		MinaLongConnServer.holderMap.put(session.getId(), null);
+		
 		/* remove HOLDER from MAP<sessionID,MHolder> */
 		GlobalMap.getSsidHolderMap().remove(session.getId());
 		// logger.warn(cause.getMessage(), cause);
