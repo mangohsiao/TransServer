@@ -16,7 +16,7 @@ public class MLoginTimerTask extends TimerTask {
 	@Override
 	public void run() {
 		// TODO 此方法在connect后60秒内无登录则触发，断开连接并清除资源。
-		if (holder.isLogin && holder.type == 2) {
+		if (holder.isLogin || holder.type == MCommon.MHOLDER_TYPE_HOME) {
 			System.out.println("Login timer Pass.");
 			return;
 		}

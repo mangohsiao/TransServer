@@ -12,6 +12,14 @@ public class TransClientLogic {
 	}
 
 	/*
+	 * 检查用户名密码是否正确。
+	 */
+	public static boolean userIsAlive(String user) {
+		System.out.println("Check Alive user: " + user);
+		return true;
+	}
+	
+	/*
 	 * put (user,sessionID) into MAP<USER, sessionID>
 	 */
 	public static int putUserSessionID() {

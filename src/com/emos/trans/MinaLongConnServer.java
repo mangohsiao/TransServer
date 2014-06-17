@@ -16,7 +16,7 @@ public class MinaLongConnServer {
 
 	private static final int PORT = 8002;
 
-	public static Map<Long, MHolder> holderMap = new HashMap<Long, MHolder>();
+//	public static Map<Long, MHolder> holderMap = new HashMap<Long, MHolder>();
 
 	public void start() throws IOException {
 
@@ -30,6 +30,7 @@ public class MinaLongConnServer {
 		// ProtocolCodecFilter(new TextLineEncoder(), new ));
 		acceptor.setHandler(new MinaLongConnServerHandler());
 		acceptor.getSessionConfig().setReadBufferSize(4096 * 2);
+		acceptor.getSessionConfig().setReaderIdleTime(MCommon.READER_IDEL_TIMEOUT);
 		acceptor.bind(new InetSocketAddress(PORT));
 		MLog.logger.info("Listeningon port " + PORT);
 	}

@@ -5,6 +5,7 @@ import org.apache.mina.core.session.IoSession;
 public class MHolder {
 	IoSession session = null;
 	short type = 0;		/* 1 is Home , 2 is Phone */
+	String id = null;
 	
 	/* members for Message Processing */
 	short msgPreType = 0;

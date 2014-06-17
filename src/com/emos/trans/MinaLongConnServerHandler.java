@@ -6,6 +6,9 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import javax.rmi.CORBA.Util;
+import javax.xml.bind.annotation.XmlElementDecl.GLOBAL;
+
 import org.apache.mina.core.buffer.IoBuffer;
 import org.apache.mina.core.service.IoHandlerAdapter;
 import org.apache.mina.core.session.IdleStatus;
@@ -15,11 +18,13 @@ import org.json.JSONObject;
 
 import com.emos.trans.log.MLog;
 import com.emos.trans.logic.GlobalMap;
+import com.emos.trans.logic.LogicUtils;
 import com.emos.trans.logic.TransClientLogic;
 
 public class MinaLongConnServerHandler extends IoHandlerAdapter {
 
-//	private final Logger logger = (Logger) LoggerFactory.getLogger(getClass());
+	// private final Logger logger = (Logger)
+	// LoggerFactory.getLogger(getClass());
 
 	@Override
 	public void sessionOpened(IoSession session) {
@@ -29,15 +34,14 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 		MLog.logger.info("LongConnect Server opened Session ID ="
 				+ String.valueOf(session.getId()));
 		MLog.logger.info("Received from IP: " + clientIp);
-
 		/* open a session && put it into map && TOBE verify */
 		MHolder holder = new MHolder();
 		holder.session = session;
 		GlobalMap.getSsidHolderMap().put(session.getId(), holder);
 
 		/* 加入计时器，连接XX秒后未登录的直接断开连接 */
-		// MLoginTimer.schedule(new MLoginTimerTask(holder),
-		// MCommon.DELAY_LOGIN_CHECK_TASK);
+		MLoginTimer.schedule(new MLoginTimerTask(holder),
+				MCommon.DELAY_LOGIN_CHECK_TASK);
 	}
 
 	@Override
@@ -62,7 +66,8 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 
 	private void processMsgBytes(byte[] bufBytes, int limit, MHolder holder) {
 		int ptr = 0;
-		short type = 0, pLen;
+		short type = 0;
+		int pLen;
 		int remaining = holder.msgRemaining;
 		while (ptr < limit) {
 			// System.out.print("#");
@@ -105,11 +110,8 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 					return;
 				}
 				/* get Length of payload */
-				short l1 = (short) bufBytes[ptr];
-				short l0 = (short) bufBytes[ptr + 1];
-				l1 <<= 8;
-				pLen = (short) (l1 | l0);
-				// MLog.logger.trace("pLen : " + pLen);
+				pLen = (bufBytes[ptr] & 0xff) << 8 | bufBytes[ptr + 1] & 0xff;
+				MLog.logger.trace("pLen : " + pLen);
 				ptr += 2;
 
 				// process Payload
@@ -130,7 +132,7 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 					}
 					ptr = limit;
 				} else {
-					handlePayload(holder.session, type, bufBytes, ptr, pLen);
+					handlePayload(holder, type, bufBytes, ptr, pLen);
 					ptr += pLen;
 				}
 
@@ -143,14 +145,14 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 				} else {
 					if (holder.msgPreBytes != null) {
 						// handle pre msg && remaining msg
-						handlePayload2(holder.session, holder.msgPreType,
+						handlePayload2(holder, holder.msgPreType,
 								holder.msgPreBytes, 0,
 								holder.msgPreBytes.length, bufBytes, ptr,
 								remaining);
 					} else {
 						/* no prebytes Payload */
-						handlePayload(holder.session, holder.msgPreType,
-								bufBytes, ptr, remaining);
+						handlePayload(holder, holder.msgPreType, bufBytes, ptr,
+								remaining);
 					}
 					ptr += remaining;
 					remaining = 0;
@@ -160,8 +162,8 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 			} else if (remaining == -1) {
 				/* only read 1 byte. */
 				System.out.print("r=-1 ");
-				//TODO reserved 还未解析。
-//				short reserved = bufBytes[ptr];
+				// TODO reserved 还未解析。
+				// short reserved = bufBytes[ptr];
 				ptr++;
 				if (type == 0x01) {
 					// HeartBeat MSG
@@ -185,10 +187,7 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 					continue;
 				}
 				/* get Length of payload */
-				short l1 = (short) bufBytes[ptr];
-				short l0 = (short) bufBytes[ptr + 1];
-				l1 <<= 8;
-				pLen = (short) (l1 | l0);
+				pLen = (bufBytes[ptr] & 0xff) << 8 | bufBytes[ptr + 1] & 0xff;
 				MLog.logger.trace("r2-len=" + pLen + " ");
 				remaining = pLen;
 				holder.msgRemaining = pLen;
@@ -198,10 +197,7 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 				/* only read 3 byte. */
 				/* calculate the Length */
 				/* get Length of payload */
-				short l1 = (short) holder.msgPreBytes[0];
-				short l0 = (short) bufBytes[0];
-				l1 <<= 8;
-				pLen = (short) (l1 | l0);
+				pLen = (holder.msgPreBytes[0] & 0xff) << 8 | bufBytes[0] & 0xff;
 				remaining = pLen;
 				holder.msgRemaining = pLen;
 				MLog.logger.trace("r=-3.pl=" + pLen + " ");
@@ -212,16 +208,17 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 		}/* end of while */
 	}
 
-	private void handlePayload(IoSession session, int type, byte[] bufBytes,
+	private void handlePayload(MHolder holder, int type, byte[] bufBytes,
 			int off, int len) {
-		handlePayload2(session, type, null, 0, 0, bufBytes, off, len);
+		handlePayload2(holder, type, null, 0, 0, bufBytes, off, len);
 	}
 
-	private void handlePayload2(IoSession session, int type, byte[] preBytes,
+	private void handlePayload2(MHolder holder, int type, byte[] preBytes,
 			int preOff, int preLen, byte[] bufBytes, int off, int len) {
 		int rtvl;
-
+		IoSession session = holder.session;
 		/* combine buffer. */
+		MLog.logger.debug("preLen = " + preLen + " len = " + len);
 		byte[] buffer = new byte[preLen + len];
 		for (int i = 0, j = preOff; i < preLen; i++, j++) {
 			buffer[i] = preBytes[j];
@@ -238,136 +235,100 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 			switch (type) {
 			/**********************************************
 			 * Logic For Phone;
-			 **********************************************/			
+			 **********************************************/
 			/* 登录验证，不通过则更新schedule=60秒 */
-			case MCommon.MSG_PHONE_LOGIN: 
+			case MCommon.MSG_PHONE_LOGIN:
 				MLog.logger.debug(" -- MSG_PHONE_LOGIN -- ");
+				String user = jsonMsg.getString("USER");
+				String pswd = jsonMsg.getString("PSWD");
+				/* 检查该用户密码是否正确。 */
+				TransClientLogic.checkUserPswd(user, pswd);
+				/* 检查该用户是否登陆过未清理，进行资源清理。或者通知下线。 */
+				if (TransClientLogic.userIsAlive(user)) {
+					/* 清理旧的USER资源，可以发送登录冲突 */
+					// 根据user查到sessionID
+					Long ssid = GlobalMap.getUserSsidMap().get(user);
+					// 根据sessionID查到holder，发出冲突push消息，然后断开session，删除sessionID为KEY的值，删除user-ssid
+					if (ssid != null) {
+						MHolder holder_01 = GlobalMap.getSsidHolderMap().get(
+								ssid);
+						if (holder_01 != null) {
+							MLog.logger.debug(user
+									+ " already exist. Cleaning....");
+							holder_01.session.close(false);
+							GlobalMap.getSsidHolderMap().remove(ssid);
+							GlobalMap.getUserSsidMap().remove(user);
+						}
+					}
+				}
+				// 将user-ssid放入MAP。
+				GlobalMap.getUserSsidMap().put(user, holder.session.getId());
+				holder.isLogin = true;
+				holder.type = MCommon.MHOLDER_TYPE_PHONE;
+				holder.id = user;
+				// TODO 发送确认消息给客户端。
 				break;
-				
-			/* 登出，断开连接，清除User的资源及绑定关系 */	
-			case MCommon.MSG_PHONE_LOGOUT: 
+
+			/* 登出，断开连接，清除User的资源及绑定关系 */
+			case MCommon.MSG_PHONE_LOGOUT:
 				MLog.logger.debug(" -- MSG_PHONE_LOGOUT -- ");
+				/* 断开连接，清理旧的USER资源 */
 				break;
-				
+
 			/* 注册启动的安防主控的UUID */
-			case MCommon.MSG_PHONE_REG_UUID: 
+			case MCommon.MSG_PHONE_REG_UUID:
 				MLog.logger.debug(" -- MSG_PHONE_REG_UUID -- ");
+				/* 查询是否注册？是的话删除之前的，否则加直接加入uuid-user */
+				String uuid_01 = jsonMsg.getString("UUID");
+				String user_01 = jsonMsg.getString("USER");
+				Set<String> set = GlobalMap.getUidUserMap().get(uuid_01);
+				if (set != null) {
+					set.add(user_01);
+				} else {
+					// UUID not bound
+					JSONObject res01 = new JSONObject();
+					res01.put("RES", MCommon.RES_HOME_NOT_REG);
+					Utils.sendMsgStr(session, MCommon.MSG_HOME_ALARM_RE, res01.toString());
+				}
 				break;
-				
+
 			/* 撤除注册的主控UUID，将不会推送，从MAP<UUID,SET<USER>>里删除 */
-			case MCommon.MSG_PHONE_UNREG_UUID: 
+			case MCommon.MSG_PHONE_UNREG_UUID:
 				MLog.logger.debug(" -- MSG_PHONE_UNREG_UUID -- ");
+				String uuid_02 = jsonMsg.getString("UUID");
+				String user_02 = jsonMsg.getString("USER");
+				Set<String> set_02 = GlobalMap.getUidUserMap().get(uuid_02);
+				if (set_02 != null) {
+					set_02.remove(user_02);
+				} else {
+					// UUID not bound
+				}
 				break;
 
 			/**********************************************
 			 * Logic for Home;
 			 **********************************************/
 			/* 主控发过来的消息，进行UUID登记，存入MAP<UUID,SET<USER>>, 作为key */
-			case MCommon.MSG_HOME_REG: 
+			case MCommon.MSG_HOME_REG:
 				MLog.logger.debug(" -- MSG_HOME_REG -- ");
 				String homeUuid = jsonMsg.getString("UUID");
 				// register MAP<UUID,List<User> >
 				Set<String> listUser = new HashSet<String>();
 				GlobalMap.getUidUserMap().put(homeUuid, listUser);
+				holder.type = MCommon.MHOLDER_TYPE_HOME;
+				holder.id = homeUuid;
 				break;
 
 			/* 主控发过来的消息，进行UUID撤销，清除MAP<UUID,SET<USER>>中的key-value */
-			case MCommon.MSG_HOME_UNREG: 
+			case MCommon.MSG_HOME_UNREG:
 				MLog.logger.debug(" -- MSG_HOME_UNREG -- ");
 				break;
 
 			/**********************************************
 			 * Logic for Push;
 			 **********************************************/
-			case MCommon.MSG_PUSH_ALARM: /*  */
-				MLog.logger.debug(" -- MSG_PUSH_ALARM -- ");
-				break;
-			case MCommon.MSG_PUSH_UPDATE: /*  */
-				MLog.logger.debug(" -- MSG_PUSH_UPDATE -- ");
-				break;
-			case MCommon.MSG_PUSH_SYNC: /*  */
-				MLog.logger.debug(" -- MSG_PUSH_SYNC -- ");
-				break;
-
-			/*
-			 * login MSG ???
-			 */
-			case 0x03:
-				MLog.logger.debug("login Msg.");
-				/* it's a login Msg */
-
-				break;
-
-			/*
-			 * for Testing
-			 */
-			case 0x2C:
-				String s;
-				if (preBytes != null) {
-					s = new String(preBytes, preOff, preLen,
-							Charset.forName("GBK"));
-					// s += " + ";
-					s += new String(bufBytes, off, len, Charset.forName("GBK"));
-				} else {
-					s = new String(bufBytes, off, len, Charset.forName("GBK"));
-				}
-				MLog.logger.debug(s);
-				try {
-					JSONObject json = new JSONObject(s);
-					int count = json.getInt("STR");
-					byte[] strByte = Integer.toString(count).getBytes();
-					int lenStr = strByte.length;
-					byte[] byteArray = new byte[4 + lenStr];
-					byteArray[0] = 0x00;
-					byteArray[1] = 0x00;
-					byteArray[2] = (byte) ((lenStr & 0x0000FF00) >> 8);
-					byteArray[3] = (byte) (lenStr & 0x000000FF);
-					for (int i = 4, j = 0; i < lenStr + 4; j++, i++) {
-						byteArray[i] = strByte[j];
-					}
-					IoBuffer ioBuf = IoBuffer.wrap(byteArray);
-					session.write(ioBuf);
-				} catch (JSONException e) {
-					e.printStackTrace();
-				}
-				break;
-
-			/*
-			 * 0x10 Client连接Server时，用户名密码验证，以及确认UUID
-			 */
-			case 0x10:
-				MLog.logger.debug("case 0x10");
-				String user = jsonMsg.getString("USER");
-				String uuid = jsonMsg.getString("UUID");
-				String pswd = jsonMsg.getString("PSWD");
-				rtvl = TransClientLogic.checkUserPswd(user, pswd);
-				if (rtvl < 0) {
-					MLog.logger.debug("pswd Wrong!");
-				}
-				// register MAP<UUID,List<USER> >
-				Set<String> list = GlobalMap.getUidUserMap().get(uuid);
-				if (list != null) {
-					list.add(user);
-				} else {
-					// TODO send back msg.
-					MLog.logger.debug("UUID not running.");
-				}
-				// register MAP<USER,sessionID>
-				GlobalMap.getUserSsidMap().put(user, session.getId());
-				break;
-
-			/*
-			 * 0x12 Client退出推送
-			 */
-			case 0x12:
-				MLog.logger.debug("case 0x12");
-				break;
-
-			/*
-			 * 0x22 Home端推送消息，格式{json}
-			 */
-			case 0x122:
-				MLog.logger.debug("case 0x22");
+			case MCommon.MSG_HOME_ALARM: /*  */
+				MLog.logger.debug(" -- MSG_HOME_ALARM -- ");
 				String toPushUuid = jsonMsg.getString("UUID");
 				// get List<USER>
 				Set<String> listToPushUser = GlobalMap.getUidUserMap().get(
@@ -380,38 +341,45 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 					break;
 				}
 				for (String toPushUser : listToPushUser) {
+					MLog.logger.debug("pushing..." + toPushUser);
 					Long sessionID = sessionIdMap.get(toPushUser);
 					if (sessionID != null) {
-						MLog.logger.debug("pushing..." + toPushUser);
-						MHolder holder = holderMap.get(sessionID);
-						if (holder == null) {
+						MHolder holderUser = holderMap.get(sessionID);
+						if (holderUser == null) {
 							MLog.logger.debug("USER session not found.");
+							listToPushUser.remove(sessionID);
 							continue;
 						}
 						// push Message
-						byte[] strInBytes = strIn.getBytes();
-						byte[] toPushBytes = new byte[strInBytes.length + 4];
-						toPushBytes[0] = 0x23;
-						toPushBytes[1] = 0x23;
-						toPushBytes[2] = (byte) ((strInBytes.length & 0x0000FF00) >> 8);
-						toPushBytes[3] = (byte) (strInBytes.length & 0x000000FF);
-						for (int i = 4, j = 0; i < strInBytes.length + 4; i++, j++) {
-							toPushBytes[i] = strInBytes[j];
-						}
+						byte[] toPushBytes = LogicUtils.packMsg(
+								(short) MCommon.MSG_PUSH_ALARM, preBytes,
+								preOff, preLen, bufBytes, off, len);
 						IoBuffer mIoBuffer = IoBuffer.wrap(toPushBytes);
-						holder.session.write(mIoBuffer);
+						holderUser.session.write(mIoBuffer);
 					} else {
 						// session == null, clean!!!!
 					}
 				}// end of for
 				break;
+			case MCommon.MSG_HOME_UPDATE: /*  */
+				MLog.logger.debug(" -- MSG_HOME_UPDATE -- ");
+				break;
+			case MCommon.MSG_HOME_SYNC: /*  */
+				MLog.logger.debug(" -- MSG_HOME_SYNC -- ");
+				break;
 
 			default:
+				/* Invalid format message */
+				MLog.logger
+						.error("Invalid format message. MSG_TYPE = {}", type);
 				break;
 			}
+			MLog.logger.info(strIn);
 		} catch (JSONException e1) {
 			// JOSN格式解析出错。
 			e1.printStackTrace();
+			MLog.logger
+					.info("Json Parsing Error. Message received error. Wrong Message.");
 		}
 	}
 
@@ -426,27 +394,44 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 	@Override
 	public void sessionIdle(IoSession session, IdleStatus status) {
 
-		MLog.logger.debug("Disconnectingthe idle.");
-		session.close(true);
+		if (status == IdleStatus.READER_IDLE) {
+			MLog.logger.info("Reader idle.");
+		} else if (status == IdleStatus.WRITER_IDLE) {
+			MLog.logger.info("Writer idle.");
+		} else if (status == IdleStatus.BOTH_IDLE) {
 
-		/* remove HOLDER from MAP<sessionID,MHolder> */
-		GlobalMap.getSsidHolderMap().remove(session.getId());
+		}
+		session.close(true);
 	}
 
 	@Override
 	public void exceptionCaught(IoSession session, Throwable cause) {
-
-		// close the connection onexceptional situation
-		MLog.logger.debug("in exception.");
-		MLog.logger.debug(cause.getMessage());
-
-		/* remove This session in the map */
-		// MinaLongConnServer.holderMap.put(session.getId(), null);
-
-		/* remove HOLDER from MAP<sessionID,MHolder> */
-		GlobalMap.getSsidHolderMap().remove(session.getId());
-		// logger.warn(cause.getMessage(), cause);
+		// close the connection on exceptional situation
+		MLog.logger.debug("in exception. - " + cause.getMessage());
+		cause.printStackTrace();
 		session.close(true);
+	}
+
+	@Override
+	public void sessionClosed(IoSession session) throws Exception {
+		super.sessionClosed(session);
+		/* remove HOLDER from MAP<sessionID,MHolder> */
+		Map<Long, MHolder> map = GlobalMap.getSsidHolderMap();
+		long id = session.getId();
+		MHolder holder = map.get(id);
+		if (holder != null) {
+			if (holder.type == MCommon.MHOLDER_TYPE_HOME) {
+				MLog.logger.debug("home disconnected uuid = " + holder.id);
+			} else if (holder.type == MCommon.MHOLDER_TYPE_PHONE) {
+				MLog.logger.debug("PHONE disconnected user = " + holder.id);
+				GlobalMap.getUserSsidMap().remove(holder.id);
+			} else {
+				MLog.logger.debug("unkown MHOLDER_TYPE.");
+				return;
+			}
+		}
+		map.remove(id);
+		MLog.logger.info(holder.id + " closed. ssid = " + id);
 	}
 
 }
