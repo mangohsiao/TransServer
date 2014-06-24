@@ -16,6 +16,10 @@ public class MLoginTimer {
 	public static void schedule(MLoginTimerTask task, long delay) {
 		timer.schedule(task, delay);
 	}
+	
+	public static void schedule(MLoginDBTimerTask task, long delay) {
+		timer.schedule(task, delay);
+	}
 
 	public static void cancel() {
 		timer.cancel();

@@ -3,14 +3,16 @@ package com.emos.trans;
 import java.io.IOException;
 import java.net.BindException;
 import java.net.InetSocketAddress;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
 
 import org.apache.mina.core.service.IoAcceptor;
 import org.apache.mina.filter.logging.LoggingFilter;
 import org.apache.mina.transport.socket.nio.NioSocketAcceptor;
 
 import com.emos.trans.log.MLog;
+import com.emos.trans.pojo.UserTemp;
+import com.emos.trans.test.Test;
+import com.emos.trans.util.DBHelper;
 
 public class MinaLongConnServer {
 
@@ -33,6 +35,9 @@ public class MinaLongConnServer {
 		acceptor.getSessionConfig().setReaderIdleTime(MCommon.READER_IDEL_TIMEOUT);
 		acceptor.bind(new InetSocketAddress(PORT));
 		MLog.logger.info("Listeningon port " + PORT);
+		
+		DBHelper.cleanTables();
+//		Test.testDB();
 	}
 
 	public static void main(String[] args) throws IOException {
