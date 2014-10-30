@@ -36,7 +36,11 @@ public class MinaLongConnServer {
 		acceptor.bind(new InetSocketAddress(PORT));
 		MLog.logger.info("Listeningon port " + PORT);
 		
+		/*
+		 * DB version.
+		 */
 		DBHelper.cleanTables();
+		
 //		Test.testDB();
 	}
 

@@ -3,6 +3,9 @@ package com.emos.trans.logic;
 import org.apache.mina.core.session.IoSession;
 
 public class SHolder{
+	public static final short TYPE_PHONE = 2;
+	public static final short TYPE_HOME = 1;
+	
 	public int type = 0;
 	public IoSession session = null;
 	

@@ -3,6 +3,7 @@ package com.emos.trans;
 import java.net.InetSocketAddress;
 import java.nio.charset.Charset;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -18,11 +19,14 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import com.emos.trans.log.MLog;
+import com.emos.trans.logic.DataMap;
 import com.emos.trans.logic.GlobalMap;
+import com.emos.trans.logic.Home;
 import com.emos.trans.logic.LogicUtils;
 import com.emos.trans.logic.SHolder;
 import com.emos.trans.logic.SessionMap;
 import com.emos.trans.logic.TransClientLogic;
+import com.emos.trans.logic.User;
 import com.emos.trans.pojo.HomeTemp;
 import com.emos.trans.pojo.UserTemp;
 import com.emos.trans.util.DBHelper;
@@ -44,7 +48,8 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 //		MHolder holder = new MHolder();
 //		holder.session = session;
 //		GlobalMap.getSsidHolderMap().put(session.getId(), holder);
-		/* for DB */
+		
+		/* DB version */
 		SHolder sholder = new SHolder();
 		sholder.setSession(session);
 		SessionMap.getMap().put(session.getId(), sholder);
@@ -259,6 +264,10 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 				Long ssid_old,ssid_new;
 				
 				/* 检查该用户是否登陆过未清理，进行资源清理。或者通知下线。 */
+				/*
+				 * DB version.
+				 */
+				/*
 				List<UserTemp> list = DBHelper.listUserByName(user);
 				ssid_new = session.getId();
 				UserTemp userNew = new UserTemp(user);
@@ -268,7 +277,7 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 					ssid_old = usertemp.getSessionId();
 					MLog.logger.debug("DB - user exist. " + ssid_old);
 					DBHelper.updateUser(userNew);	//更新数据库
-					/* 处理旧的连接  */
+					// 处理旧的连接  
 					SessionMap.getMap().get(ssid_old).getSession().close(false);					
 				} else {
 					// 插入user到DB表
@@ -276,6 +285,28 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 				}
 				holder.setType(1);
 				holder.isLogin = true;
+				*/
+				
+				/*
+				 * Mapping Version.
+				 */
+				User old_user = DataMap.getUserMap().get(user);
+				User new_user = null;
+				if(old_user != null){
+					IoSession s = SessionMap.getMap().get(old_user.sessionId).getSession();
+					if(s != null){
+						s.close(false);
+					}
+					old_user = null;
+				}
+				new_user = new User();
+				new_user.sessionId = session.getId();
+				new_user.username = user;
+				new_user.boundUuid = null;
+				DataMap.getUserMap().put(user, new_user);
+				holder.setType(SHolder.TYPE_PHONE);
+				holder.isLogin = true;
+				MLog.logger.debug("Phone Login Finished.");
 				
 				// TODO 发送确认消息给客户端。
 				break;
@@ -291,9 +322,10 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 				MLog.logger.debug(" -- MSG_PHONE_REG_UUID -- ");
 				/* 查询是否注册？是的话删除之前的，否则加直接加入uuid-user */
 				String uuid_01 = jsonMsg.getString("UUID");
-				String user_01 = jsonMsg.getString("USER");
+				String user_to_reg = jsonMsg.getString("USER");
 
 				/* for DB */
+				/*
 				List<UserTemp> list_01 = DBHelper.listUserBySsid(session
 						.getId());
 				if (list_01.size() > 0) {
@@ -301,6 +333,25 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 					userObj_01.setBoundUuid(uuid_01);
 					DBHelper.updateUser(userObj_01);
 					MLog.logger.debug("Update reg. " + session.getId());
+				}
+				*/
+				
+				/*
+				 * for Mapping
+				 */
+				User regUser = DataMap.getUserMap().get(user_to_reg);
+				if(regUser.sessionId == session.getId()){
+					Home home_to_reg = DataMap.getHomeMap().get(uuid_01);
+					if(home_to_reg != null){
+						//Home is online.
+						regUser.boundUuid = uuid_01;
+						home_to_reg.getUsers().add(user_to_reg);
+						MLog.logger.debug("Phone Reg Finished.");
+					}else{
+						//Home is not alive.
+					}
+				}else{
+					//The username is illegal, not equals to the SessionId.
 				}
 				break;
 
@@ -311,6 +362,7 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 				String user_02 = jsonMsg.getString("USER");
 
 				/* for DB */
+				/*
 				List<UserTemp> list_02 = DBHelper.listUserBySsid(session
 						.getId());
 				if (list_02.size() > 0) {
@@ -319,6 +371,22 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 					DBHelper.updateUser(userObj_02);
 					MLog.logger.debug("Update Un reg. " + session.getId());
 				}
+				*/
+				
+				/*
+				 * for Mapping
+				 */
+				User regUser_02 = DataMap.getUserMap().get(user_02);
+				if(regUser_02.sessionId == session.getId()){
+					Home home_02 = DataMap.getHomeMap().get(regUser_02.boundUuid);
+					if(home_02 != null){
+						home_02.getUsers().remove(regUser_02);
+					}
+					regUser_02.boundUuid = null;
+				}else{
+					//The username is illegal, not equals to the SessionId.
+				}
+				
 				break;
 
 			/**********************************************
@@ -330,8 +398,8 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 				String homeUuid = jsonMsg.getString("UUID");
 
 				/* register for DB */
-				Long sid_old,
-				sid_new;
+				/*
+				Long sid_old,sid_new;
 				sid_new = session.getId();
 				HomeTemp home_01 = new HomeTemp(homeUuid);
 				home_01.setSessionId(sid_new);
@@ -342,12 +410,32 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 					MLog.logger.debug("DB - home exist. " + sid_old);
 					DBHelper.updateHome(home_01);	//更新数据库
 
-					/* 处理旧的连接  */
+					// 处理旧的连接  
 					SessionMap.getMap().get(sid_old).getSession().close(false);
 				} else {
 					DBHelper.insertHome(home_01);
 				}
 				SessionMap.getMap().get(sid_new).setType(2);
+				*/
+				
+				/*
+				 * For Mapping
+				 */
+				Home old_home = DataMap.getHomeMap().get(homeUuid);
+				Home new_home = null;
+				if(old_home != null){
+					IoSession s = SessionMap.getMap().get(old_home.sessionId).getSession();
+					if(s != null){
+						s.close(false);
+					}
+					old_home = null;
+				}
+				new_home = new Home();
+				new_home.sessionId = session.getId();
+				new_home.uuid = homeUuid;
+				DataMap.getHomeMap().put(homeUuid, new_home);
+				MLog.logger.debug("Home Reg Finished.");
+				SessionMap.getMap().get(new_home.sessionId).setType(2);
 				break;
 
 			/* 主控发过来的消息，进行UUID撤销，清除MAP<UUID,SET<USER>>中的key-value */
@@ -362,7 +450,11 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 				MLog.logger.debug(" -- MSG_HOME_ALARM -- ");
 				String toPushUuid = jsonMsg.getString("UUID");
 
+				/*
+				 * DB. version
+				 */
 				// get Users
+				/*
 				List<UserTemp> listToPush = DBHelper.listUserByUuid(toPushUuid);
 				Map<Long, SHolder> map = SessionMap.getMap();
 				for (UserTemp toPushUser : listToPush) {
@@ -379,7 +471,34 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 					IoBuffer mIoBuffer = IoBuffer.wrap(toPushBytes);
 					ssToPush.write(mIoBuffer);
 				}
+				*/
+				
+				/*
+				 * Mapping Version.
+				 */
+				Home home_to_push = DataMap.getHomeMap().get(toPushUuid);
+				if(home_to_push == null){
+					session.close(false);
+				}
+				Set<String> users = home_to_push.getUsers();
+				for (Iterator iterator = users.iterator(); iterator.hasNext();) {
+					String userStr = (String) iterator.next();
+					User user_to_push = DataMap.getUserMap().get(userStr);
+					if(user_to_push != null){
+						IoSession ssToPush = SessionMap.getMap().get(user_to_push.sessionId).getSession();
+						if (ssToPush == null) {
+							continue;
+						}
+						// push Message
+						byte[] toPushBytes = LogicUtils.packMsg(
+								(short) MCommon.MSG_PUSH_ALARM, preBytes, preOff,
+								preLen, bufBytes, off, len);
+						IoBuffer mIoBuffer = IoBuffer.wrap(toPushBytes);
+						ssToPush.write(mIoBuffer);
+					}
+				}				
 				break;
+				
 			case MCommon.MSG_HOME_UPDATE: /*  */
 				MLog.logger.debug(" -- MSG_HOME_UPDATE -- ");
 				break;
@@ -435,6 +554,7 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 	public void sessionClosed(IoSession session) throws Exception {
 		super.sessionClosed(session);
 		/* for DB */
+		/*
 		Long sid = session.getId();
 		SHolder sholder = SessionMap.getMap().get(sid);
 		switch (sholder.getType()) {
@@ -461,6 +581,8 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 		default:
 			break;
 		}
+		*/
+		
 	}
 
 }
