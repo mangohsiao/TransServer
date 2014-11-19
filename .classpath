@@ -17,5 +17,7 @@
 	<classpathentry kind="lib" path="lib/antlr-2.7.6.jar"/>
 	<classpathentry kind="lib" path="lib/javassist-3.12.0.GA.jar"/>
 	<classpathentry kind="lib" path="lib/jta-1.1.jar"/>
+	<classpathentry kind="lib" path="lib/proxool-0.9.1.jar"/>
+	<classpathentry kind="lib" path="lib/proxool-cglib.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
