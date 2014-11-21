@@ -10,6 +10,11 @@ import org.apache.mina.filter.logging.LoggingFilter;
 import org.apache.mina.transport.socket.nio.NioSocketAcceptor;
 
 import com.emos.trans.log.MLog;
+import com.emos.trans.msg.HomeAlarmHandler;
+import com.emos.trans.msg.HomeRegisterHandler;
+import com.emos.trans.msg.PhoneLoginHandler;
+import com.emos.trans.msg.PhoneUUIDHandler;
+import com.emos.trans.msgInterface.MsgDispatcher;
 import com.emos.trans.pojo.UserTemp;
 import com.emos.trans.test.Test;
 import com.emos.trans.util.DBHelper;
@@ -38,6 +43,24 @@ public class MinaLongConnServer {
 		
 		DBHelper.cleanTables();
 //		Test.testDB();
+		
+		/*
+		 * 注册消息处理模块
+		 */
+		//手机端注册，登录
+		PhoneLoginHandler rgsHandler = new PhoneLoginHandler();
+		MsgDispatcher.registerMsgHandler(MCommon.MSG_PHONE_LOGIN, rgsHandler);
+		//家庭端注册
+		HomeRegisterHandler homeRegisterHandler = new HomeRegisterHandler();
+		MsgDispatcher.registerMsgHandler(MCommon.MSG_HOME_REG, homeRegisterHandler);
+		MsgDispatcher.registerMsgHandler(MCommon.MSG_HOME_UNREG, homeRegisterHandler);
+		//手机端UUID注册、注销
+		PhoneUUIDHandler phoneUUIDHandler = new PhoneUUIDHandler();
+		MsgDispatcher.registerMsgHandler(MCommon.MSG_PHONE_REG_UUID, phoneUUIDHandler);
+		MsgDispatcher.registerMsgHandler(MCommon.MSG_PHONE_UNREG_UUID, phoneUUIDHandler);
+		//家庭端的推送消息处理
+		HomeAlarmHandler homeAlarmHandler = new HomeAlarmHandler();
+		MsgDispatcher.registerMsgHandler(MCommon.MSG_HOME_ALARM, homeAlarmHandler);
 	}
 
 	public static void main(String[] args) throws IOException {

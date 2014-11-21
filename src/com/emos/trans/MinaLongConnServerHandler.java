@@ -23,6 +23,7 @@ import com.emos.trans.logic.LogicUtils;
 import com.emos.trans.logic.SHolder;
 import com.emos.trans.logic.SessionMap;
 import com.emos.trans.logic.TransClientLogic;
+import com.emos.trans.msgInterface.MsgDispatcher;
 import com.emos.trans.pojo.HomeTemp;
 import com.emos.trans.pojo.UserTemp;
 import com.emos.trans.util.DBHelper;
@@ -41,9 +42,9 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 				+ String.valueOf(session.getId()));
 		MLog.logger.info("Received from IP: " + clientIp);
 		/* open a session && put it into map && TOBE verify */
-//		MHolder holder = new MHolder();
-//		holder.session = session;
-//		GlobalMap.getSsidHolderMap().put(session.getId(), holder);
+		// MHolder holder = new MHolder();
+		// holder.session = session;
+		// GlobalMap.getSsidHolderMap().put(session.getId(), holder);
 		/* for DB */
 		SHolder sholder = new SHolder();
 		sholder.setSession(session);
@@ -237,6 +238,14 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 			buffer[i] = bufBytes[j];
 		}
 
+		/*
+		 * buffer为消息缓存，其长度为preLen+len，类型为type，holder包含所需环境。
+		 */
+		MsgDispatcher.processMsg(holder, type, buffer, preLen + len);
+
+		if (true)
+			return;
+
 		String strIn = new String(buffer, 0, preLen + len);
 		try {
 			/* building Json Object */
@@ -246,139 +255,13 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 			/**********************************************
 			 * Logic For Phone;
 			 **********************************************/
-			/* 登录验证，不通过则更新schedule=60秒 */
-			case MCommon.MSG_PHONE_LOGIN:
-				MLog.logger.debug(" -- MSG_PHONE_LOGIN -- ");
-				String user = jsonMsg.getString("USER");
-				String pswd = jsonMsg.getString("PSWD");
-				/* 检查该用户密码是否正确。 */
-				if(TransClientLogic.checkUserPswd(user, pswd) < 0){
-					/* 登录失败  */
-					break;
-				}
-				Long ssid_old,ssid_new;
-				
-				/* 检查该用户是否登陆过未清理，进行资源清理。或者通知下线。 */
-				List<UserTemp> list = DBHelper.listUserByName(user);
-				ssid_new = session.getId();
-				UserTemp userNew = new UserTemp(user);
-				userNew.setSessionId(ssid_new);
-				if (list.size() > 0) {
-					UserTemp usertemp = list.get(0);
-					ssid_old = usertemp.getSessionId();
-					MLog.logger.debug("DB - user exist. " + ssid_old);
-					DBHelper.updateUser(userNew);	//更新数据库
-					/* 处理旧的连接  */
-					SessionMap.getMap().get(ssid_old).getSession().close(false);					
-				} else {
-					// 插入user到DB表
-					DBHelper.insertUser(userNew);
-				}
-				holder.setType(1);
-				holder.isLogin = true;
-				
-				// TODO 发送确认消息给客户端。
-				break;
 
-			/* 登出，断开连接，清除User的资源及绑定关系 */
-			case MCommon.MSG_PHONE_LOGOUT:
-				MLog.logger.debug(" -- MSG_PHONE_LOGOUT -- ");
-				/* 断开连接，清理旧的USER资源 */
-				break;
-
-			/* 注册启动的安防主控的UUID */
-			case MCommon.MSG_PHONE_REG_UUID:
-				MLog.logger.debug(" -- MSG_PHONE_REG_UUID -- ");
-				/* 查询是否注册？是的话删除之前的，否则加直接加入uuid-user */
-				String uuid_01 = jsonMsg.getString("UUID");
-				String user_01 = jsonMsg.getString("USER");
-
-				/* for DB */
-				List<UserTemp> list_01 = DBHelper.listUserBySsid(session
-						.getId());
-				if (list_01.size() > 0) {
-					UserTemp userObj_01 = list_01.get(0);
-					userObj_01.setBoundUuid(uuid_01);
-					DBHelper.updateUser(userObj_01);
-					MLog.logger.debug("Update reg. " + session.getId());
-				}
-				break;
-
-			/* 撤除注册的主控UUID，将不会推送，从MAP<UUID,SET<USER>>里删除 */
-			case MCommon.MSG_PHONE_UNREG_UUID:
-				MLog.logger.debug(" -- MSG_PHONE_UNREG_UUID -- ");
-				String uuid_02 = jsonMsg.getString("UUID");
-				String user_02 = jsonMsg.getString("USER");
-
-				/* for DB */
-				List<UserTemp> list_02 = DBHelper.listUserBySsid(session
-						.getId());
-				if (list_02.size() > 0) {
-					UserTemp userObj_02 = list_02.get(0);
-					userObj_02.setBoundUuid(null);
-					DBHelper.updateUser(userObj_02);
-					MLog.logger.debug("Update Un reg. " + session.getId());
-				}
-				break;
-
-			/**********************************************
-			 * Logic for Home;
-			 **********************************************/
-			/* 主控发过来的消息，进行UUID登记，存入MAP<UUID,SET<USER>>, 作为key */
-			case MCommon.MSG_HOME_REG:
-				MLog.logger.debug(" -- MSG_HOME_REG -- ");
-				String homeUuid = jsonMsg.getString("UUID");
-
-				/* register for DB */
-				Long sid_old,
-				sid_new;
-				sid_new = session.getId();
-				HomeTemp home_01 = new HomeTemp(homeUuid);
-				home_01.setSessionId(sid_new);
-				List<HomeTemp> list_home = DBHelper.listHomeByUuid(homeUuid);
-				if (list_home.size() > 0) {
-					HomeTemp home = list_home.get(0);
-					sid_old = home.getSessionId();
-					MLog.logger.debug("DB - home exist. " + sid_old);
-					DBHelper.updateHome(home_01);	//更新数据库
-
-					/* 处理旧的连接  */
-					SessionMap.getMap().get(sid_old).getSession().close(false);
-				} else {
-					DBHelper.insertHome(home_01);
-				}
-				SessionMap.getMap().get(sid_new).setType(2);
-				break;
-
-			/* 主控发过来的消息，进行UUID撤销，清除MAP<UUID,SET<USER>>中的key-value */
-			case MCommon.MSG_HOME_UNREG:
-				MLog.logger.debug(" -- MSG_HOME_UNREG -- ");
-				break;
+			
 
 			/**********************************************
 			 * Logic for Push;
 			 **********************************************/
 			case MCommon.MSG_HOME_ALARM: /*  */
-				MLog.logger.debug(" -- MSG_HOME_ALARM -- ");
-				String toPushUuid = jsonMsg.getString("UUID");
-
-				// get Users
-				List<UserTemp> listToPush = DBHelper.listUserByUuid(toPushUuid);
-				Map<Long, SHolder> map = SessionMap.getMap();
-				for (UserTemp toPushUser : listToPush) {
-					Long idToPush = toPushUser.getSessionId();
-					SHolder holderToPush = map.get(idToPush);
-					IoSession ssToPush = holderToPush.getSession();
-					if (ssToPush == null) {
-						continue;
-					}
-					// push Message
-					byte[] toPushBytes = LogicUtils.packMsg(
-							(short) MCommon.MSG_PUSH_ALARM, preBytes, preOff,
-							preLen, bufBytes, off, len);
-					IoBuffer mIoBuffer = IoBuffer.wrap(toPushBytes);
-					ssToPush.write(mIoBuffer);
-				}
 				break;
 			case MCommon.MSG_HOME_UPDATE: /*  */
 				MLog.logger.debug(" -- MSG_HOME_UPDATE -- ");
@@ -427,7 +310,7 @@ public class MinaLongConnServerHandler extends IoHandlerAdapter {
 	public void exceptionCaught(IoSession session, Throwable cause) {
 		// close the connection on exceptional situation
 		MLog.logger.debug("in exception. - " + cause.getMessage());
-//		cause.printStackTrace();
+		// cause.printStackTrace();
 		session.close(true);
 	}
 
