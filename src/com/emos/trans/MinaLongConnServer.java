@@ -12,6 +12,7 @@ import org.apache.mina.transport.socket.nio.NioSocketAcceptor;
 import com.emos.trans.log.MLog;
 import com.emos.trans.msg.HomeAlarmHandler;
 import com.emos.trans.msg.HomeRegisterHandler;
+import com.emos.trans.msg.PhoneControlHandler;
 import com.emos.trans.msg.PhoneLoginHandler;
 import com.emos.trans.msg.PhoneUUIDHandler;
 import com.emos.trans.msgInterface.MsgDispatcher;
@@ -58,6 +59,10 @@ public class MinaLongConnServer {
 		PhoneUUIDHandler phoneUUIDHandler = new PhoneUUIDHandler();
 		MsgDispatcher.registerMsgHandler(MCommon.MSG_PHONE_REG_UUID, phoneUUIDHandler);
 		MsgDispatcher.registerMsgHandler(MCommon.MSG_PHONE_UNREG_UUID, phoneUUIDHandler);
+		//手机端UUID注册、注销
+		PhoneControlHandler phoneControlHandler = new PhoneControlHandler();
+		MsgDispatcher.registerMsgHandler(MCommon.MSG_PHONE_CONTROL, phoneControlHandler);
+		MsgDispatcher.registerMsgHandler(MCommon.MSG_PHONE_CONTROL_RE, phoneControlHandler);
 		//家庭端的推送消息处理
 		HomeAlarmHandler homeAlarmHandler = new HomeAlarmHandler();
 		MsgDispatcher.registerMsgHandler(MCommon.MSG_HOME_ALARM, homeAlarmHandler);

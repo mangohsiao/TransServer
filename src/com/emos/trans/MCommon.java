@@ -32,6 +32,14 @@ public class MCommon {
 	public static final int MSG_PHONE_UNREG_UUID = 0x17;
 	public static final int MSG_PHONE_UNREG_UUID_RE = 0x18;
 	
+	/* Login Message */
+	public static final int MSG_PHONE_CONTROL = 0x19;
+	public static final int MSG_PHONE_CONTROL_TRANS = 0x20;
+	public static final int MSG_PHONE_CONTROL_RE = 0x119;
+	public static final int MSG_PHONE_CONTROL_TRANS_RE = 0x120;
+	
+	
+	/*  */
 	
 	/*
 	 * Message for Home
